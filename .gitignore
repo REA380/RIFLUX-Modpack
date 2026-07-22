@@ -1,0 +1,12 @@
+﻿*.log
+crash-reports/
+logs/
+kubejs/
+scripts/
+.vscode/
+.idea/
+*.swp
+node_modules/
+build/
+dist/
+*.tmp
