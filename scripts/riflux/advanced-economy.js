@@ -85,10 +85,6 @@ const AdvancedEconomy = {
     return this.playerEconomy[playerName];
   },
   
-  // ═══════════════════════════════════════════════════════════════════════════
-  // BANKING SYSTEM
-  // ═══════════════════════════════════════════════════════════════════════════
-  
   // Deposit money to bank
   deposit(player, amount) {
     const playerName = player.username;
@@ -167,35 +163,6 @@ const AdvancedEconomy = {
     return true;
   },
   
-  // Calculate and apply interest
-  applyInterest(playerName) {
-    const economy = this.playerEconomy[playerName];
-    
-    if (!economy) return 0;
-    
-    const timeSinceLastPayout = Date.now() - economy.lastInterestPayout;
-    const monthsElapsed = timeSinceLastPayout / (30 * 24 * 60 * 60 * 1000);
-    
-    if (monthsElapsed < 1) return 0; // Only apply once per month
-    
-    const interest = Math.floor(economy.bankBalance * this.CONFIG.BANK_INTEREST_RATE * monthsElapsed);
-    
-    if (interest > 0) {
-      economy.bankBalance += interest;
-      economy.totalInterestEarned += interest;
-      economy.lastInterestPayout = Date.now();
-      
-      Logger.INFO(`💵 Interest payout for ${playerName}: ${interest} MBAQ`);
-      return interest;
-    }
-    
-    return 0;
-  },
-  
-  // ═══════════════════════════════════════════════════════════════════════════
-  // PLAYER-TO-PLAYER TRADING
-  // ═══════════════════════════════════════════════════════════════════════════
-  
   // Transfer money between players
   transferMoney(fromPlayerName, toPlayerName, amount) {
     const fromEconomy = this.playerEconomy[fromPlayerName];
@@ -227,106 +194,8 @@ const AdvancedEconomy = {
     this.recordTransaction(fromPlayerName, 'transfer_out', amount, toPlayerName);
     this.recordTransaction(toPlayerName, 'transfer_in', finalAmount, fromPlayerName);
     
-    // Record in market
-    this.market.transactions.push({
-      from: fromPlayerName,
-      to: toPlayerName,
-      amount: finalAmount,
-      tax: tax,
-      timestamp: Date.now()
-    });
-    
-    return { 
-      success: true, 
-      message: `Transferred ${finalAmount} MBAQ (tax: ${tax})`,
-      finalAmount: finalAmount,
-      tax: tax
-    };
+    return { success: true, message: `Transferred ${finalAmount} MBAQ (tax: ${tax})` };
   },
-  
-  // ═══════════════════════════════════════════════════════════════════════════
-  // MARKET SYSTEM
-  // ═══════════════════════════════════════════════════════════════════════════
-  
-  // Sell item to market
-  sellItem(player, itemId, quantity, pricePerUnit) {
-    const playerName = player.username;
-    const economy = this.playerEconomy[playerName];
-    
-    if (!economy) return false;
-    
-    if (pricePerUnit <= 0) {
-      player.tell('§cPrice must be positive!');
-      return false;
-    }
-    
-    const totalPrice = pricePerUnit * quantity;
-    
-    economy.sellingItems.push({
-      itemId: itemId,
-      quantity: quantity,
-      pricePerUnit: pricePerUnit,
-      totalPrice: totalPrice,
-      seller: playerName,
-      listedAt: Date.now(),
-      active: true
-    });
-    
-    player.tell(`§a✓ Listed ${quantity}x ${itemId} for ${pricePerUnit} MBAQ each (Total: ${totalPrice} MBAQ)`);
-    
-    return true;
-  },
-  
-  // Buy item from market
-  buyItem(player, itemId, quantity, maxPricePerUnit) {
-    const playerName = player.username;
-    const economy = this.playerEconomy[playerName];
-    
-    if (!economy) return false;
-    
-    // Find matching selling items
-    let totalCost = 0;
-    let itemsBought = 0;
-    
-    for (let listing of this.playerEconomy[playerName].sellingItems) {
-      if (listing.itemId === itemId && listing.active && listing.pricePerUnit <= maxPricePerUnit) {
-        const canBuy = Math.min(quantity - itemsBought, listing.quantity);
-        totalCost += canBuy * listing.pricePerUnit;
-        itemsBought += canBuy;
-        
-        if (canBuy >= listing.quantity) {
-          listing.active = false;
-        } else {
-          listing.quantity -= canBuy;
-        }
-        
-        if (itemsBought >= quantity) break;
-      }
-    }
-    
-    if (itemsBought === 0) {
-      player.tell('§cNo matching items found in market!');
-      return false;
-    }
-    
-    if (totalCost > economy.cash) {
-      player.tell(`§cInsufficient funds! You need ${totalCost} MBAQ`);
-      return false;
-    }
-    
-    // Process purchase
-    economy.cash -= totalCost;
-    economy.totalSpent += totalCost;
-    economy.completedTrades++;
-    
-    player.tell(`§a✓ Purchased ${itemsBought}x ${itemId} for ${totalCost} MBAQ`);
-    
-    return true;
-  },
-  
-  // ═══════════════════════════════════════════════════════════════════════════
-  // TRANSACTION HISTORY
-  // ═══════════════════════════════════════════════════════════════════════════
   
   // Record transaction
   recordTransaction(playerName, type, amount, relatedPlayer) {
@@ -348,19 +217,6 @@ const AdvancedEconomy = {
     }
   },
   
-  // Get transaction history
-  getTransactionHistory(playerName, limit = 10) {
-    const economy = this.playerEconomy[playerName];
-    
-    if (!economy) return [];
-    
-    return economy.transactions.slice(-limit).reverse();
-  },
-  
-  // ═══════════════════════════════════════════════════════════════════════════
-  // DISPLAY FUNCTIONS
-  // ═══════════════════════════════════════════════════════════════════════════
-  
   // Display balance
   displayBalance(player) {
     const playerName = player.username;
@@ -378,52 +234,9 @@ const AdvancedEconomy = {
     player.tell(`§b║ §aBank: §f${String(economy.bankBalance).padEnd(10)} §7MBAQ§b`);
     player.tell(`§b║ §a─────────────────────────────────────§b`);
     player.tell(`§b║ §aTotal: §f${String(total).padEnd(10)} §7MBAQ§b`);
-    player.tell('§b╠════════════════════════════════════════╣');
-    player.tell(`§b║ §aInterest Earned: §f${economy.totalInterestEarned} MBAQ§b`);
-    player.tell(`§b║ §aCompleted Trades: §f${economy.completedTrades}§b`);
     player.tell('§b╚════════════════════════════════════════╝');
     player.tell('§f');
-  },
-  
-  // Display market info
-  displayMarketInfo(player) {
-    const totalTransactions = this.market.transactions.length;
-    const totalVolume = this.market.transactions.reduce((sum, t) => sum + t.amount, 0);
-    
-    player.tell('§f');
-    player.tell('§6╔════════════════════════════════════════╗');
-    player.tell('§6║         §e📊 MARKET STATISTICS§6        ║');
-    player.tell('§6╠════════════════════════════════════════╣');
-    player.tell(`§6║ §eTotalTransactions: §f${totalTransactions}§6`);
-    player.tell(`§6║ §eMarket Volume: §f${totalVolume} MBAQ§6`);
-    player.tell(`§6║ §eTax Rate: §f${(this.CONFIG.TAX_RATE * 100)}%§6`);
-    player.tell('§6║ §eActive Listings: §f' + this.market.totalVolume + '§6');
-    player.tell('§6╚════════════════════════════════════════╝');
-    player.tell('§f');
-  },
-  
-  // Display richest players
-  displayRichest(limit = 10) {
-    const players = Object.entries(this.playerEconomy)
-      .map(([name, econ]) => ({
-        name: name,
-        total: econ.cash + econ.bankBalance
-      }))
-      .sort((a, b) => b.total - a.total)
-      .slice(0, limit);
-    
-    return players;
-  },
-  
-  // Get price for item
-  getPrice(itemId) {
-    return this.CONFIG.BASE_PRICES[itemId] || 50;
   }
 };
-
-// Export for other scripts
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = AdvancedEconomy;
-}
 
 Logger.SUCCESS('✅ Advanced Economy System loaded');
